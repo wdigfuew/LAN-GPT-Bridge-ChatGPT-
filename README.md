@@ -39,6 +39,7 @@
 *   **配置**: 确认端口为 `2222`，Token 默认为 `123456`。
 *   点击 **“启动服务器 (Start)”**。
 *   观察状态栏变为绿色 "运行中"，且日志显示 "成功接管 Chrome"。
+*   在弹出的Chrome页面手动登录GPT账户
 
 ### 3. 连接客户端
 1.  将 `client_a.html` 发送到同一局域网下的任意电脑或手机。
@@ -79,4 +80,5 @@
 *   `server_b.py`: 服务端核心逻辑 (WebSocket + Playwright)。
 *   `client_a.html`: 客户端前端页面。
 *   `start_chrome_clone.bat`: 辅助脚本，用于启动独立环境的 Chrome。
+
 
