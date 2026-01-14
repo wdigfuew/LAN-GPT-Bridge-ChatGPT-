@@ -1,4 +1,4 @@
-# ChatGPT Bridge System (双端内网穿透系统)
+# ChatGPT Bridge System
 
 本系统允许你通过一个轻量级的 HTML 客户端 (`client_a.html`) 在任意设备上远程控制并使用运行在另一台电脑 (`Server B`) 上的 ChatGPT 网页版。
 
@@ -79,3 +79,4 @@
 *   `server_b.py`: 服务端核心逻辑 (WebSocket + Playwright)。
 *   `client_a.html`: 客户端前端页面。
 *   `start_chrome_clone.bat`: 辅助脚本，用于启动独立环境的 Chrome。
+
