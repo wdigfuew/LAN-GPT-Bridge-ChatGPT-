@@ -47,7 +47,7 @@
 3.  在弹出的配置窗口中：
     *   **IP 地址**: 输入 Server B 电脑的局域网 IP (如 `192.168.1.5`)。
     *   **端口**: 默认 `2222`。
-    *   **Token**: 默认 `123456`。
+    *   **Auth_Token**: 默认 `123456`。
 4.  点击 **“保存并连接”**。
 
 ## ⌨️ 操作指南
@@ -80,5 +80,6 @@
 *   `server_b.py`: 服务端核心逻辑 (WebSocket + Playwright)。
 *   `client_a.html`: 客户端前端页面。
 *   `start_chrome_clone.bat`: 辅助脚本，用于启动独立环境的 Chrome。
+
 
 
