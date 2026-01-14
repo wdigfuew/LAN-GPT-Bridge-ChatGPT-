@@ -237,8 +237,8 @@
                         class="w-full bg-gray-50 dark:bg-[#343541] border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white outline-none focus:border-[#10a37f] transition-colors">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Auth Token</label>
-                    <input type="password" id="conf-token" placeholder="与 B 端环境变量一致" value="123456"
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">密码</label>
+                    <input type="password" id="conf-token" placeholder="请输入B端提供的密码"
                         class="w-full bg-gray-50 dark:bg-[#343541] border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white outline-none focus:border-[#10a37f] transition-colors">
                 </div>
                 <div id="conn-status" class="text-sm text-gray-500 dark:text-gray-400 h-5"></div>
@@ -276,6 +276,12 @@
 
         // 立即初始化
         initTheme();
+
+        // 自动识别 IP 和 端口 (如果是在 Web 运行)
+        if (window.location.protocol.startsWith('http')) {
+            document.getElementById('conf-ip').value = window.location.hostname;
+            document.getElementById('conf-port').value = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        }
 
         // 配置 Marked.js 使用 Highlight.js
         marked.setOptions({

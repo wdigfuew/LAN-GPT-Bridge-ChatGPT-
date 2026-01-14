@@ -168,10 +168,17 @@ async def get_or_create_page():
             
     raise Exception("浏览器未初始化，无法获取页面")
 
+from fastapi.responses import FileResponse
+
 @app.get("/ping")
 async def ping():
     """健康检查接口"""
     return {"status": "ok", "browser_connected": page is not None}
+
+@app.get("/")
+async def serve_client():
+    """直接返回客户端页面"""
+    return FileResponse("client_a.html")
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
