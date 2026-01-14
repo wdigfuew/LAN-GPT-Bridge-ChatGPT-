@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT 局域网客户端</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <!-- Marked.js 用于 Markdown 渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Highlight.js 用于代码高亮 -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <!-- KaTeX 用于数学公式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js"></script>
+    <style>
+        /* 简单的 Markdown 样式适配 */
+        .prose pre {
+            background-color: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .prose code {
+            background-color: #374151;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+        }
+
+        .prose p {
+            margin-bottom: 0.8em;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5em;
+            margin-bottom: 0.8em;
+        }
+
+        .prose ol {
+            list-style-type: decimal;
+            padding-left: 1.5em;
+            margin-bottom: 0.8em;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #343541;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #565869;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #acacbe;
+        }
+    </style>
+</head>
+
+<body class="bg-[#343541] text-gray-100 flex h-screen overflow-hidden font-sans">
+
+    <!-- 侧边栏 -->
+    <div id="sidebar"
+        class="w-[260px] bg-gray-50 dark:bg-[#202123] p-2 flex flex-col hidden md:flex border-r border-gray-200 dark:border-gray-600 h-full z-50 transition-colors duration-200">
+        <!-- 顶部：新建对话 + 收起按钮 -->
+        <div class="flex items-center gap-2 mb-2 shrink-0">
+            <button onclick="startNewChat()"
+                class="flex-1 flex items-center gap-3 px-3 py-3 rounded-md border border-gray-300 dark:border-white/20 hover:bg-gray-200 dark:hover:bg-gray-900 transition-colors text-sm text-gray-700 dark:text-white shrink-0">
+                <span>+</span> 新建对话
+            </button>
+            <button onclick="toggleSidebar()"
+                class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                title="收起侧边栏">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="9" y1="3" x2="9" y2="21"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 历史记录区域 (占据剩余空间) -->
+        <div class="flex-1 flex flex-col min-h-0 overflow-hidden my-2">
+            <div class="flex items-center justify-between px-2 mb-2 cursor-pointer group shrink-0"
+                onclick="toggleHistoryList()">
+                <div class="flex items-center gap-2">
+                    <span
+                        class="text-xs font-semibold text-gray-400 group-hover:text-white transition-colors uppercase tracking-wider">历史记录</span>
+                    <svg id="history-list-chevron"
+                        class="text-gray-500 group-hover:text-white transform transition-transform duration-200"
+                        xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9l6 6 6-6" />
+                    </svg>
+                </div>
+                <!-- 刷新按钮 -->
+                <button onclick="event.stopPropagation(); fetchHistoryList()"
+                    class="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-800" title="刷新列表">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto space-y-1 transition-all duration-300 pr-1" id="history-list">
+                <!-- 历史记录列表 -->
+            </div>
+        </div>
+
+        <!-- 底部设置与信息 -->
+        <div class="border-t border-gray-200 dark:border-gray-700 pt-2 shrink-0 flex gap-2">
+            <button onclick="showConfigModal()"
+                class="flex-1 flex items-center justify-start gap-3 px-3 py-3 rounded-md hover:bg-gray-200 dark:hover:bg-gray-900 transition-colors text-sm text-gray-700 dark:text-white">
+                <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
+                    stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l-.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z">
+                    </path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>设置</span>
+            </button>
+            <button onclick="toggleTheme()"
+                class="flex items-center justify-center px-3 py-3 rounded-md hover:bg-gray-200 dark:hover:bg-gray-900 transition-colors text-sm text-gray-700 dark:text-white"
+                title="切换日间/夜间模式">
+                <!-- Sun Icon -->
+                <svg id="theme-icon-sun" class="block dark:hidden h-5 w-5" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z">
+                    </path>
+                </svg>
+                <!-- Moon Icon -->
+                <svg id="theme-icon-moon" class="hidden dark:block h-5 w-5" fill="none" stroke="currentColor"
+                    viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+        <div class="text-xs text-gray-500 text-left pl-4 p-2">
+            双程序内网穿透系统<br>Client A
+        </div>
+    </div>
+
+    <!-- 主聊天区域 -->
+    <div class="flex-1 flex flex-col relative w-full h-full bg-white dark:bg-[#343541] transition-colors duration-200">
+        <!-- 展开侧边栏按钮 (悬浮) -->
+        <button id="sidebar-open-btn" onclick="toggleSidebar()"
+            class="absolute top-2 left-2 z-40 p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded hover:bg-gray-200 dark:hover:bg-gray-700/50 transition md:hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+        </button>
+        <!-- 聊天记录容器 -->
+        <div id="chat-container" class="flex-1 overflow-y-auto w-full p-4 pb-32 scroll-smooth">
+            <!-- 加载更多按钮 -->
+            <button id="load-more-btn" onclick="loadMoreMessages()"
+                class="hidden w-full py-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded transition-colors mb-4">
+                查看更多历史消息
+            </button>
+
+            <!-- 欢迎语 -->
+            <div class="flex flex-col items-center justify-center h-full text-center space-y-4" id="welcome-screen">
+                <h1 class="text-4xl font-bold text-gray-800 dark:text-gray-200 transition-colors">ChatGPT Bridge</h1>
+                <p class="text-gray-600 dark:text-gray-400 transition-colors">请确保 B 端服务已运行并配置连接</p>
+                <div class="flex gap-2">
+                    <button onclick="showConfigModal()"
+                        class="px-4 py-2 bg-[#10a37f] hover:bg-[#1a7f64] rounded text-white transition">设置连接</button>
+                </div>
+            </div>
+            <!-- 消息列表会插入到这里 -->
+        </div>
+
+        <!-- 底部输入框 -->
+        <div
+            class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent dark:from-[#343541] dark:via-[#343541] dark:to-transparent pt-10 pb-6 px-4 transition-colors duration-200">
+            <div
+                class="max-w-3xl mx-auto bg-white dark:bg-[#40414f] rounded-lg shadow-xl border border-gray-200 dark:border-gray-600/50 flex flex-col gap-2 relative transition-colors duration-200">
+                <textarea id="user-input" rows="1"
+                    class="w-full bg-transparent text-gray-800 dark:text-white p-3 pr-10 outline-none resize-none max-h-[200px] overflow-y-auto m-0 transition-colors"
+                    placeholder="发送消息..."></textarea>
+                <button id="send-btn"
+                    class="absolute right-2 bottom-2.5 p-1 rounded-md text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900 disabled:opacity-40 transition"
+                    disabled>
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round"
+                        stroke-linejoin="round" class="h-4 w-4" height="1em" width="1em"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+            <div class="text-center text-xs text-gray-400 dark:text-gray-500 mt-2">Free Research Preview. 自动生成内容可能不准确。
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置弹窗 -->
+    <div id="config-modal"
+        class="hidden fixed inset-0 bg-black/50 dark:bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm transition-colors duration-200">
+        <div
+            class="bg-white dark:bg-[#202123] p-6 rounded-lg w-96 shadow-2xl border border-gray-300 dark:border-gray-600 relative transition-colors duration-200">
+            <button onclick="closeConfigModal()"
+                class="absolute top-2 right-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">✕</button>
+            <h2 class="text-xl font-bold mb-4 text-gray-900 dark:text-white">连接配置</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">服务端 IP 地址
+                        (B端)</label>
+                    <input type="text" id="conf-ip" placeholder="192.168.1.X" value="127.0.0.1"
+                        class="w-full bg-gray-50 dark:bg-[#343541] border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white outline-none focus:border-[#10a37f] transition-colors">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">端口</label>
+                    <input type="number" id="conf-port" placeholder="2222" value="2222"
+                        class="w-full bg-gray-50 dark:bg-[#343541] border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white outline-none focus:border-[#10a37f] transition-colors">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Auth Token</label>
+                    <input type="password" id="conf-token" placeholder="与 B 端环境变量一致" value="123456"
+                        class="w-full bg-gray-50 dark:bg-[#343541] border border-gray-300 dark:border-gray-600 rounded p-2 text-gray-900 dark:text-white outline-none focus:border-[#10a37f] transition-colors">
+                </div>
+                <div id="conn-status" class="text-sm text-gray-500 dark:text-gray-400 h-5"></div>
+
+                <div class="flex gap-2">
+                    <button onclick="testConnection()"
+                        class="flex-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-800 dark:text-white py-2 rounded font-medium transition">检测连接</button>
+                    <button onclick="connectWebSocket()"
+                        class="flex-1 bg-[#10a37f] hover:bg-[#1a7f64] text-white py-2 rounded font-medium transition">保存并连接</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 主题切换逻辑 ---
+        function initTheme() {
+            // 优先读取 localStorage，否则跟随系统
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleTheme() {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.theme = 'light';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.theme = 'dark';
+            }
+        }
+
+        // 立即初始化
+        initTheme();
+
+        // 配置 Marked.js 使用 Highlight.js
+        marked.setOptions({
+            highlight: function (code, lang) {
+                const language = highlight.getLanguage(lang) ? lang : 'plaintext';
+                return highlight.highlight(code, { language }).value;
+            },
+            langPrefix: 'hljs language-'
+        });
+
+        // Math 渲染辅助函数
+        function renderMath(element) {
+            if (window.renderMathInElement) {
+                renderMathInElement(element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false },
+                        { left: '\\(', right: '\\)', display: false },
+                        { left: '\\[', right: '\\]', display: true }
+                    ],
+                    throwOnError: false
+                });
+            }
+        }
+
+        // Math 保护与恢复机制
+        // 防止 Marked 解析器破坏 LaTeX 语法 (如 x_i 被解析为斜体)
+
+        const mathExpressions = [];
+
+        function escapeMath(text) {
+            mathExpressions.length = 0; // 清空
+            // 匹配顺序很重要：先匹配块级 $$...$$ 和 \[...\]，再匹配行内 \(...\) 和 $...$
+            // 注意：JS正则不支持 (?R) 递归，这里用简单贪婪匹配，对于极度复杂的嵌套可能有限制，但对 GPT 输出通常足够
+
+            // 1. Block: $$ ... $$
+            text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
+                mathExpressions.push(match);
+                return `MATH_BLOCK_${mathExpressions.length - 1}_END`;
+            });
+
+            // 2. Block: \[ ... \]
+            text = text.replace(/\\\[([\s\S]*?)\\\]/g, (match) => {
+                mathExpressions.push(match);
+                return `MATH_BLOCK_${mathExpressions.length - 1}_END`;
+            });
+
+            // 3. Inline: \( ... \)
+            text = text.replace(/\\\(([\s\S]*?)\\\)/g, (match) => {
+                mathExpressions.push(match);
+                return `MATH_INLINE_${mathExpressions.length - 1}_END`;
+            });
+
+            // 4. Inline: $ ... $ (排除货币符号，要求 $ 后非空且非数字开头可能比较安全，简单起见先匹配常见数学模式)
+            // 这是一个比较危险的匹配，因为 $100 会被误判。
+            // 策略：GPT 通常使用 \( \) 做行内公式。如果必须支持 $，尽量严格。
+            // 暂时跳过 $...$ 以免误伤，除非用户强烈要求。GPT 默认很少用 $ 包裹公式。
+
+            return text;
+        }
+
+        function restoreMath(html) {
+            return html.replace(/MATH_(BLOCK|INLINE)_(\d+)_END/g, (match, type, index) => {
+                return mathExpressions[parseInt(index)] || match;
+            });
+        }
+
+        let socket = null;
+        let isConnected = false;
+        let currentAssistantMessageDiv = null;
+        let currentAssistantRawText = "";
+
+        // 分页状态
+        let currentChatUrl = ""; // 当前会话 ID
+        let currentOffset = 0;   // 当前消息偏移量
+
+        // 页面元素
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const configModal = document.getElementById('config-modal');
+        const statusMsg = document.getElementById('conn-status');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const historyList = document.getElementById('history-list');
+        const loadMoreBtn = document.getElementById('load-more-btn');
+
+        // 显示配置弹窗
+        function showConfigModal() {
+            configModal.classList.remove('hidden');
+            statusMsg.innerText = "";
+        }
+
+        function closeConfigModal() {
+            if (isConnected) {
+                configModal.classList.add('hidden');
+            } else {
+                statusMsg.innerText = "请先连接服务器";
+            }
+        }
+
+        window.onload = () => {
+            showConfigModal();
+        };
+
+        // ... (Ping 测试函数保持不变，篇幅原因省略，假设没改动) ...
+        function testConnection() {
+            const ip = document.getElementById('conf-ip').value;
+            const port = document.getElementById('conf-port').value;
+            const token = document.getElementById('conf-token').value;
+
+            if (!ip || !port) { statusMsg.innerText = "配置不完整"; return; }
+            statusMsg.innerText = "正在尝试 Ping...";
+            statusMsg.className = "text-sm text-yellow-400 h-5";
+
+            const wsUrl = `ws://${ip}:${port}/ws?token=${token}`;
+            const testWs = new WebSocket(wsUrl);
+            let pongReceived = false;
+            testWs.onopen = () => testWs.send(JSON.stringify({ type: "ping" }));
+            testWs.onmessage = (evt) => {
+                if (JSON.parse(evt.data).type === 'pong') {
+                    pongReceived = true;
+                    statusMsg.innerText = "✔ 连接成功！";
+                    statusMsg.className = "text-sm text-green-400 h-5";
+                    testWs.close();
+                }
+            };
+            testWs.onerror = () => { statusMsg.innerText = "❌ 连接失败"; statusMsg.className = "text-sm text-red-400 h-5"; };
+            setTimeout(() => { if (!pongReceived && testWs.readyState !== 3) testWs.close(); }, 3000);
+        }
+
+        function connectWebSocket() {
+            const ip = document.getElementById('conf-ip').value;
+            const port = document.getElementById('conf-port').value;
+            const token = document.getElementById('conf-token').value;
+
+            if (!ip || !port) { statusMsg.innerText = "请输入 IP 和端口"; return; }
+            statusMsg.innerText = "正在建立长连接...";
+            statusMsg.className = "text-sm text-yellow-400 h-5";
+
+            if (socket) socket.close();
+            const wsUrl = `ws://${ip}:${port}/ws?token=${token}`;
+
+            try {
+                socket = new WebSocket(wsUrl);
+                socket.onopen = () => {
+                    isConnected = true;
+                    configModal.classList.add('hidden');
+                    welcomeScreen.classList.add('hidden');
+                    statusMsg.innerText = "连接已建立";
+                    appendSystemMessage(`已连接到 ${ip}:${port}`);
+                    userInput.focus();
+
+                    // 连接成功后，自动获取历史列表
+                    fetchHistoryList();
+                };
+
+                socket.onmessage = (event) => handleMessage(JSON.parse(event.data));
+
+                socket.onclose = () => {
+                    isConnected = false;
+                    appendSystemMessage("连接已断开");
+                    statusMsg.innerText = "连接已断开";
+                    statusMsg.className = "text-sm text-red-400 h-5";
+                };
+
+                socket.onerror = (e) => { console.error(e); statusMsg.innerText = "连接错误"; };
+
+            } catch (e) {
+                statusMsg.innerText = "连接异常: " + e.message;
+            }
+        }
+
+        function handleMessage(data) {
+            if (data.type === 'delta') {
+                if (!currentAssistantMessageDiv) createAssistantMessageBubble();
+                currentAssistantRawText += data.content;
+
+                // 1. 保护公式
+                const protectedText = escapeMath(currentAssistantRawText);
+                // 2. Markdown 渲染
+                const html = marked.parse(protectedText);
+                // 3. 恢复公式
+                currentAssistantMessageDiv.innerHTML = restoreMath(html);
+
+                // 4. Katex 渲染
+                renderMath(currentAssistantMessageDiv);
+                scrollToBottom();
+
+            } else if (data.type === 'done') {
+                currentAssistantMessageDiv = null;
+                currentAssistantRawText = "";
+                sendBtn.disabled = false;
+                // 完成一次生成后，自动将 offset + 2 (一问一答)
+                currentOffset += 2;
+
+            } else if (data.type === 'error') {
+                appendSystemMessage("错误: " + data.message);
+                sendBtn.disabled = false;
+
+            } else if (data.type === 'history_list') {
+                renderHistoryList(data.data);
+
+            } else if (data.type === 'message_history') {
+                // 渲染历史消息 (prepend)
+                prependTimeoutMessages(data.data);
+
+            } else if (data.type === 'new_chat_success') {
+                // 清空聊天窗口
+                chatContainer.innerHTML = "";
+                // 重新放入 load more 按钮（虽隐藏但保留结构）
+                chatContainer.appendChild(loadMoreBtn);
+                loadMoreBtn.classList.add('hidden');
+
+                // 重置状态
+                currentOffset = 0;
+                currentChatUrl = "";
+
+                // 显示成功提示
+                appendSystemMessage("已开始新对话");
+                // 也可以选择 fetchHistoryList() 更新列表
+                fetchHistoryList();
+            }
+        }
+
+        // --- 侧边栏折叠功能 ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const openBtn = document.getElementById('sidebar-open-btn');
+
+            // 逻辑：
+            // 1. 如果当前是隐藏（hidden），则移除 hidden，并确保显示
+            // 2. 如果当前是显示，则添加 hidden
+            // 注意：Tailwind 的 md:flex 会在宽屏强制显示 flex。
+            // 为了能手动隐藏，我们需要 toggle 一个能覆盖 md:flex 的类，或者直接操作 style
+            // 但最简单的是：toggle 'hidden' 并移除/添加 'md:flex'
+
+            if (sidebar.classList.contains('hidden')) {
+                // 展开
+                sidebar.classList.remove('hidden');
+                sidebar.classList.add('flex'); // 确保它是 flex 布局
+                sidebar.classList.add('md:flex'); // 恢复响应式
+
+                openBtn.classList.add('md:hidden'); // 大屏下隐藏打开按钮
+                openBtn.classList.add('hidden');    // 小屏下也隐藏（因为侧边栏盖住了或者推开了）
+                // 实际上小屏如果是覆盖式，打开按钮应该隐藏；如果是推开式，也隐藏。
+            } else {
+                // 收起
+                sidebar.classList.add('hidden');
+                sidebar.classList.remove('flex');
+                sidebar.classList.remove('md:flex'); // 移除 md:flex 防止大屏自动显示
+
+                openBtn.classList.remove('md:hidden'); // 大屏下显示打开按钮
+                openBtn.classList.remove('hidden');    // 小屏下显示打开按钮
+            }
+        }
+
+        // --- 新建对话功能 ---
+        function startNewChat() {
+            if (!isConnected) {
+                appendSystemMessage("请先连接 B 端服务");
+                return;
+            }
+            appendSystemMessage("正在创建新对话...");
+            socket.send(JSON.stringify({ type: "new_chat" }));
+        }
+
+        // --- 历史记录列表功能 ---
+        function toggleHistoryList() {
+            const list = document.getElementById('history-list');
+            const chevron = document.getElementById('history-list-chevron');
+
+            if (list.classList.contains('hidden')) {
+                list.classList.remove('hidden');
+                // 恢复 flex
+                list.classList.add('flex-1');
+                chevron.style.transform = "rotate(0deg)";
+            } else {
+                list.classList.add('hidden');
+                list.classList.remove('flex-1');
+                chevron.style.transform = "rotate(-90deg)";
+            }
+        }
+
+        function fetchHistoryList() {
+            if (isConnected) socket.send(JSON.stringify({ type: "get_history" }));
+        }
+
+        function renderHistoryList(list) {
+            historyList.innerHTML = "";
+            list.forEach(item => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#2A2B32] rounded flex items-center gap-2 truncate transition-colors";
+                btn.innerHTML = `
+                    <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    <span class="truncate">${item.title}</span>
+                `;
+                btn.onclick = () => switchChat(item.id);
+                historyList.appendChild(btn);
+            });
+        }
+
+        function switchChat(url) {
+            if (!isConnected) return;
+            currentChatUrl = url;
+            currentOffset = 0; // 重置分页
+
+            // 清空当前界面
+            chatContainer.innerHTML = "";
+            // 重新把 load more 按钮加回去 (虽然它现在是隐藏的)
+            chatContainer.appendChild(loadMoreBtn);
+            loadMoreBtn.classList.add('hidden');
+
+            appendSystemMessage("正在切换会话...");
+            socket.send(JSON.stringify({ type: "switch_chat", url: url }));
+        }
+
+        // --- 消息分页功能 ---
+        function loadMoreMessages() {
+            if (!isConnected) return;
+            // 每次加载 10 条
+            const limit = 10;
+            loadMoreBtn.innerText = "加载中...";
+            loadMoreBtn.disabled = true;
+
+            socket.send(JSON.stringify({
+                type: "get_messages",
+                limit: limit,
+                offset: currentOffset
+            }));
+
+            // 更新 offset (虽然服务端可能没返回那么多，这里简单累计，更严谨的做法是服务端返回实际数量)
+            currentOffset += limit;
+        }
+
+        function prependTimeoutMessages(messages) {
+            // messages 是一个数组 [{role, content}, ...]
+            // 如果是空，提示没有更多了
+            loadMoreBtn.disabled = false;
+            loadMoreBtn.innerText = "查看更多历史消息";
+
+            if (messages.length === 0) {
+                loadMoreBtn.innerText = "没有更多消息了";
+                loadMoreBtn.disabled = true;
+                return;
+            }
+
+            // 显示加载按钮
+            loadMoreBtn.classList.remove('hidden');
+
+            // 保持滚动位置：在插入前记录高度
+            const oldHeight = chatContainer.scrollHeight;
+            const oldScrollTop = chatContainer.scrollTop;
+
+            // 倒序遍历（因为列表通常是时间倒序或者需要倒序插入）
+            // 假设 server 返回的是 [最旧 ... 最新] 
+            // 如果 server 返回的是 [最新 (nth=last) ... 最旧]
+            // 具体看 server 实现：server用 range(start, end) 拿的是旧到新
+
+            // 我们需要把它们插入到 loadMoreBtn 之后
+            // 创建一个临时片段
+            const fragment = document.createDocumentFragment();
+
+            messages.forEach(msg => {
+                const div = document.createElement('div');
+                const isUser = msg.role === 'user';
+                const bgColor = isUser ? "bg-white dark:bg-gray-800" : "bg-gray-50 dark:bg-[#444654]";
+                const avatar = isUser ?
+                    `<div class="w-[30px] h-[30px] bg-purple-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">You</div>` :
+                    `<div class="w-[30px] h-[30px] bg-[#10a37f] rounded-sm flex items-center justify-center text-white text-xs font-bold">GPT</div>`;
+
+                div.className = `w-full border-b border-black/10 dark:border-gray-900/50 text-gray-800 dark:text-gray-100 ${bgColor} group`;
+                // 历史消息处理
+                const protectedContent = escapeMath(msg.content);
+                const renderedHtml = marked.parse(protectedContent);
+                const finalHtml = restoreMath(renderedHtml);
+
+                div.innerHTML = `
+                    <div class="text-base gap-4 md:gap-6 md:max-w-2xl lg:max-w-[38rem] xl:max-w-3xl p-4 md:py-6 flex lg:px-0 m-auto">
+                        <div class="flex-shrink-0 flex flex-col relative items-end">
+                            ${avatar}
+                        </div>
+                        <div class="relative flex-1 overflow-hidden prose prose-invert max-w-none message-content">
+                            ${finalHtml}
+                        </div>
+                    </div>
+                `;
+                // 渲染公式
+                renderMath(div);
+                fragment.appendChild(div);
+            });
+
+            // 插入到 loadMoreBtn 后面 (即作为第一个消息块)
+            // chatContainer firstChild 是 loadMoreBtn
+            // 所以可以直接 insertBefore 到 loadMoreBtn.nextSibling
+            // 或者更简单：直接 insertAfter loadMoreBtn
+
+            // 注意：message_history 返回的顺序。如果 Server 是按 DOM 顺序 (旧 -> 新)
+            // 那么我们直接 append 到 fragment，然后把整个 fragment 插入到最上面
+            // 但如果是在 switch_chat 时触发 (offset=0, limit=6)，这也是“最新的6条”
+
+            // 逻辑修正：
+            // 如果是 switch_chat 触发 (offset=0)，我们通常是清空了界面。这时候应该直接 append 到后面。
+            // 但因为我们设计了 loadMoreBtn 在最上面。
+
+            if (currentOffset <= 10 && chatContainer.children.length <= 2) {
+                // 刚切换的情况 (<=2 是因为有一个 loadMoreBtn 和可能一个 system msg)
+                // 直接追加到后面，并滚动到底部
+                chatContainer.appendChild(fragment);
+                scrollToBottom();
+                // 设置初始 offset
+                currentOffset = messages.length;
+            } else {
+                // 加载历史的情况：插入到 loadMoreBtn 之后
+                if (loadMoreBtn.nextSibling) {
+                    chatContainer.insertBefore(fragment, loadMoreBtn.nextSibling);
+                } else {
+                    chatContainer.appendChild(fragment);
+                }
+
+                // 恢复滚动位置
+                // 新高度 - 旧高度 = 插入内容的高度
+                // 我们希望视口位置相对于底部内容不变 -> 实际上相对于顶部变了
+                // 简单的做法：scrollTo currentPosition + (newHeight - oldHeight)
+                const newHeight = chatContainer.scrollHeight;
+                chatContainer.scrollTop = oldScrollTop + (newHeight - oldHeight);
+            }
+        }
+
+        // --- 基础聊天功能 ---
+
+        function appendUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = "w-full border-b border-black/10 dark:border-gray-900/50 text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 group";
+            div.innerHTML = `
+                <div class="text-base gap-4 md:gap-6 md:max-w-2xl lg:max-w-[38rem] xl:max-w-3xl p-4 md:py-6 flex lg:px-0 m-auto">
+                    <div class="flex-shrink-0 flex flex-col relative items-end">
+                        <div class="w-[30px] h-[30px] bg-purple-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">You</div>
+                    </div>
+                    <div class="relative flex-1 overflow-hidden min-h-[20px] whitespace-pre-wrap">${text}</div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+            currentOffset += 1;
+        }
+
+        function createAssistantMessageBubble() {
+            const div = document.createElement('div');
+            div.className = "w-full border-b border-black/10 dark:border-gray-900/50 text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-[#444654] group";
+            div.innerHTML = `
+                <div class="text-base gap-4 md:gap-6 md:max-w-2xl lg:max-w-[38rem] xl:max-w-3xl p-4 md:py-6 flex lg:px-0 m-auto">
+                    <div class="flex-shrink-0 flex flex-col relative items-end">
+                        <div class="w-[30px] h-[30px] bg-[#10a37f] rounded-sm flex items-center justify-center text-white text-xs font-bold">GPT</div>
+                    </div>
+                    <div class="relative flex-1 overflow-hidden prose prose-invert max-w-none message-content">
+                        <span class="animate-pulse">▍</span>
+                    </div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            currentAssistantMessageDiv = div.querySelector('.message-content');
+            scrollToBottom();
+            currentOffset += 1;
+        }
+
+        function appendSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = "w-full p-2 text-center text-xs text-gray-500";
+            div.innerText = text;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text || !isConnected) return;
+            appendUserMessage(text);
+            socket.send(JSON.stringify({ type: "chat", message: text }));
+            userInput.value = "";
+            userInput.style.height = 'auto';
+            sendBtn.disabled = true;
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+        userInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if (this.value.trim().length > 0) {
+                sendBtn.disabled = !isConnected;
+                sendBtn.classList.add('text-white');
+            } else {
+                sendBtn.classList.remove('text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>
