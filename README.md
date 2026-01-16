@@ -48,6 +48,7 @@
 无需传输文件，直接在另一台设备 (手机/平板/电脑) 的浏览器中输入 Server B 的 IP 和端口。
 *   例如: `http://192.168.1.5:2222`
 *   系统会自动识别 IP 并连接，无需手动配置。
+*   Token: 需手动输入 (默认 123456)。
 
 **方式 B: 离线文件模式**
 1.  将 `client_a.html` 发送到客户端设备。
@@ -88,4 +89,5 @@
 *   `server_b.py`: 服务端核心逻辑 (WebSocket + Playwright)。
 *   `client_a.html`: 客户端前端页面。
 *   `start_chrome_clone.bat`: 辅助脚本，用于启动独立环境的 Chrome。
+
 
