@@ -1,7 +1,6 @@
 # ChatGPT Bridge System (双端内网穿透系统)
 
 本系统允许你通过一个轻量级的 HTML 客户端 (`client_a.html`) 在任意设备上远程控制并使用运行在另一台电脑 (`Server B`) 上的 ChatGPT 网页版。
-此项目涉嫌
 
 ## ✨ 主要功能 (Features)
 
@@ -14,6 +13,7 @@
     *   **现代化主题**: 支持浅色/深色模式切换。
 *   **可视化服务端**: 提供 GUI 界面管理服务启动、停止及日志查看。
 *   **新增**:2026-1-17：已支持表格，公式，Markdown，Canvas显示。
+*   **不支持部分**：暂不支持模型选择，删除历史聊天记录，上传/下载图片和文件。
 
 ## 🛠️ 环境准备 (Server B)
 
@@ -102,5 +102,6 @@ The author makes no warranties regarding the correctness, completeness, or suita
 This project does not encourage, support, or endorse any activities that violate applicable laws, regulations, or third-party terms of service. Users are responsible for ensuring that their use of this project complies with all relevant laws and platform policies.
 
 The author shall not be held liable for any direct or indirect damages resulting from the use, modification, distribution, or reliance on this project.
+
 
 
