@@ -75,6 +75,8 @@ class ServerGUI:
         
         self.start_btn = ttk.Button(btn_frame, text="启动服务器 (Start)", command=self.toggle_server)
         self.start_btn.pack(side="left", expand=True, fill="x", padx=5)
+
+        ttk.Button(btn_frame, text="启动调试器 (Inspector)", command=self.launch_inspector).pack(side="left", padx=5)
         
         ttk.Button(btn_frame, text="退出 (Exit)", command=self.on_close).pack(side="right", padx=5)
 
@@ -188,6 +190,25 @@ class ServerGUI:
                     self.log(line.strip())
         except Exception as e:
             self.log(f"日志读取中断: {e}", "ERROR")
+
+    def launch_inspector(self):
+        inspector_script = os.path.join(os.getcwd(), "gpt_inspector.py")
+        if not os.path.exists(inspector_script):
+             messagebox.showerror("错误", f"找不到 {inspector_script}")
+             return
+             
+        try:
+            # 使用当前 python 解释器
+            python_path = sys.executable
+            
+            # 使用 Popen 启动
+            # Windows 下 shell=True 且传入字符串通常比较稳健，可以弹出新窗口
+            cmd = f'"{python_path}" "{inspector_script}"'
+            subprocess.Popen(cmd, shell=True)
+            
+            self.log(f"已启动调试器: {inspector_script}")
+        except Exception as e:
+            self.log(f"启动调试器失败: {e}", "ERROR")
 
     def on_close(self):
         if self.is_running:

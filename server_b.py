@@ -104,8 +104,10 @@ async def shutdown_event():
         await playwright_instance.stop()
 
 async def get_latest_assistant_response_locator():
-    """获取最后一个助手回复的消息块"""
-    return page.locator("div[data-message-author-role='assistant']").last
+    """获取最后一个助手回复的消息块 (包含 Canvas)"""
+    # 同时寻找 standard assistant message 和 canvas message
+    # 这里的 .last 会作用于整个匹配集合的最后一个
+    return page.locator("div[data-message-author-role='assistant'], div[id^='textdoc-message-']").last
 
 async def is_generating():
     """检查是否正在生成（通过'停止生成'按钮存在判断）"""
@@ -180,16 +182,41 @@ async def serve_client():
     """直接返回客户端页面"""
     return FileResponse("client_a.html")
 
+# 连接管理器
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        # 广播给所有连接
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.warning(f"广播消息失败: {e}")
+
+manager = ConnectionManager() # 全局管理器
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
+    # await websocket.accept() # 由 manager.connect 处理
     
     client_token = websocket.query_params.get("token")
     if client_token != AUTH_TOKEN:
+        await websocket.accept()
         await websocket.send_json({"type": "error", "message": "鉴权失败"})
         await websocket.close()
         return
 
+    await manager.connect(websocket)
     logger.info(f"客户端已连接: {websocket.client}")
 
     try:
@@ -244,24 +271,82 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     while True:
                         generating = await is_generating()
-                        current_text = await last_response.inner_text()
+                        
+                        # [Critical Fix] Move locator check INSIDE loop to catch new elements (e.g. Text -> Canvas)
+                        # ChatGPT might append new div blocks during the same turn.
+                        current_response = await get_latest_assistant_response_locator()
+                        
+                        try:
+                            current_text = await current_response.inner_text()
+                        except:
+                            # Element might be detached or not ready
+                            current_text = ""
+
+                        # If we switched to a new element (e.g. text finished, canvas started),
+                        # previous_text calculation needs a reset or adjustment.
+                        # For simplicity, if content drops/changes drastically, we assume new block.
+                        # But 'delta' logic is hard with switching blocks. 
+                        # Ideally we broadcast 'delta' for the *active* block.
+                        
+                        # Simplified Check: Just check if *anything* is changing on the page bottom.
+                        # Note: inner_text() on Canvas might be empty or specific text.
                         
                         if len(current_text) > len(previous_text):
                             delta = current_text[len(previous_text):]
-                            await websocket.send_json({"type": "delta", "content": delta})
+                            await manager.broadcast({"type": "delta", "content": delta})
                             previous_text = current_text
                             no_change_count = 0
+                        elif len(current_text) < len(previous_text):
+                            # Content shrink (or switched element).
+                            # If switched element, current_text is likely start of new one.
+                            # We can't easily 'delta' across elements without client support.
+                            # Just reset previous_text to treat as new stream.
+                            if len(current_text) > 0:
+                                await manager.broadcast({"type": "delta", "content": "\n[New Block]\n" + current_text})
+                                previous_text = current_text
+                                no_change_count = 0
                         else:
                             no_change_count += 1
                         
-                        if not generating and len(current_text) > 0 and no_change_count > 5:
+                        # Updated exit condition: 
+                        # Wait longer (20 * 0.5s = 10s) if generating logic is flaky
+                        if not generating and no_change_count > 20:
                             break
-                        if len(current_text) == 0 and generating:
-                            no_change_count = 0
+                        
+                        # If detecting generation but no text change, maybe it's drawing Canvas?
+                        # Canvas inner_text might not change if it's just code editor updates?
+                        # Canvas usually has inner text of the code.
+                        if generating:
+                             no_change_count = 0 # Keep alive if generating flag is true
 
                         await asyncio.sleep(0.5)
 
-                    await websocket.send_json({"type": "done"})
+                    await manager.broadcast({"type": "done"})
+                    
+                    await manager.broadcast({"type": "done"})
+                    
+                    # 5. 发送最终的完整 DOM 结构 (用于修复格式)
+                    try:
+                        # [Important] Re-fetch the locator to ensure we get the final state of the FINAL element
+                        last_response = await get_latest_assistant_response_locator()
+                        
+                        # 检查是否是 Canvas
+                        item_id = await last_response.get_attribute("id")
+                        role = await last_response.get_attribute("data-message-author-role")
+                        
+                        target_role = "assistant"
+                        if not role and item_id and item_id.startswith("textdoc-message-"):
+                            target_role = "canvas"
+                        
+                        full_html = await last_response.inner_html()
+                        await manager.broadcast({
+                            "type": "full_response", 
+                            "content": full_html, 
+                            "is_html": True,
+                            "role": target_role 
+                        })
+                    except Exception as e:
+                        logger.error(f"获取最终 DOM 失败: {e}")
 
                 except Exception as e:
                     logger.error(f"处理消息异常: {e}")
@@ -386,8 +471,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("客户端断开连接")
+        manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket 异常: {e}")
+        manager.disconnect(websocket)
 
 async def get_sidebar_chats(page_obj):
     """获取侧边栏聊天列表，如果侧边栏隐藏则自动展开"""
@@ -438,8 +525,9 @@ async def get_sidebar_chats(page_obj):
 async def get_chat_messages(page_obj, limit=6, offset=0):
     """获取聊天消息历史"""
     # 定位消息容器
-    # role='user' 或 role='assistant'
-    msg_locators = page_obj.locator("div[data-message-author-role]")
+    # role='user' 或 role='assistant'，以及 Canvas (id^='textdoc-message-')
+    # 使用逗号分隔的选择器
+    msg_locators = page_obj.locator("div[data-message-author-role], div[id^='textdoc-message-']")
     total_count = await msg_locators.count()
     
     if total_count == 0:
@@ -460,11 +548,34 @@ async def get_chat_messages(page_obj, limit=6, offset=0):
     for i in range(start_index, end_index):
         try:
             msg_item = msg_locators.nth(i)
+            
+            # 尝试获取 role，如果是 Canvas 这一项可能是 None
             role = await msg_item.get_attribute("data-message-author-role")
-            text = await msg_item.inner_text()
+            
+            # 检查是否是 Canvas
+            item_id = await msg_item.get_attribute("id")
+            if not role and item_id and item_id.startswith("textdoc-message-"):
+                role = "canvas"
+
+            if role == "user":
+                # 用户消息：只获取文本，避免获取到 ChatGPT 的布局 class (会导致靠右)
+                content = await msg_item.inner_text()
+                is_html = False
+            elif role == "canvas":
+                # Canvas 消息：获取 HTML
+                # 为了防止样式丢失，可能需要包装一下或者前端特殊处理
+                content = await msg_item.inner_html()
+                # 标记为 canvas 类型，前端可以渲染为特殊的卡片
+                is_html = True 
+            else:
+                # 助手消息：获取完整 HTML 以保留表格和公式格式
+                content = await msg_item.inner_html()
+                is_html = True
+
             results.append({
                 "role": role,
-                "content": text
+                "content": content,
+                "is_html": is_html 
             })
         except:
             continue
