@@ -1,6 +1,7 @@
 # ChatGPT Bridge System (双端内网穿透系统)
 
 本系统允许你通过一个轻量级的 HTML 客户端 (`client_a.html`) 在任意设备上远程控制并使用运行在另一台电脑 (`Server B`) 上的 ChatGPT 网页版。
+此项目涉嫌
 
 ## ✨ 主要功能 (Features)
 
@@ -12,8 +13,7 @@
     *   **侧边栏管理**: 支持展开/收起，手机端适配。
     *   **现代化主题**: 支持浅色/深色模式切换。
 *   **可视化服务端**: 提供 GUI 界面管理服务启动、停止及日志查看。
-*   数学公式无法正常显示。
-*   canvas、文件、图片暂时不支持。
+*   **新增**:2026-1-17：已支持表格，公式，Markdown，Canvas显示。
 
 ## 🛠️ 环境准备 (Server B)
 
@@ -89,5 +89,18 @@
 *   `server_b.py`: 服务端核心逻辑 (WebSocket + Playwright)。
 *   `client_a.html`: 客户端前端页面。
 *   `start_chrome_clone.bat`: 辅助脚本，用于启动独立环境的 Chrome。
+
+本项目仅供学习、研究和技术交流用途。
+作者不保证本项目的正确性、完整性或适用性。使用本项目所产生的一切后果，包括但不限于账号封禁、数据丢失、服务中断、法律风险或其他损失，均由使用者自行承担。
+本项目不鼓励、支持或纵容任何违反法律法规或第三方平台服务条款的行为。使用者有责任在使用本项目前，确认其行为符合所在地法律法规以及相关平台或服务的使用政策。
+作者不对任何因使用、修改、分发或依赖本项目而产生的直接或间接损失承担责任。
+
+This project is provided for educational, research, and technical exchange purposes only.
+
+The author makes no warranties regarding the correctness, completeness, or suitability of this project. Any consequences arising from the use of this project, including but not limited to account suspension, data loss, service interruption, legal issues, or other damages, are solely the responsibility of the user.
+
+This project does not encourage, support, or endorse any activities that violate applicable laws, regulations, or third-party terms of service. Users are responsible for ensuring that their use of this project complies with all relevant laws and platform policies.
+
+The author shall not be held liable for any direct or indirect damages resulting from the use, modification, distribution, or reliance on this project.
 
 
